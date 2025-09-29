@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画板应用 </title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <style>
+        /* 清除默认格式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+     
+        /*基础设置 背景颜色 中间对齐 */
+body {
+    background-color: #c5c5c5d0;
+    
+    text-align: center;
+     background-image: url(./514bc9e301dc29ba363a0e2be85fbf4d_720.png);
+    background-size:cover;
+    background-position: 50% 50%;
+    width:1500px;
+    height:715px;
+   position:relative
+}
+
+
+    /* 设置工具按钮 圆角 页边距 背景色 字体颜色 鼠标移到上面有小手 */
+        .toolbar button{
+             border-radius: 5px;
+            padding: 10px 20px;
+            margin: 0 15px;
+            background: #333;
+            color: white;
+            cursor: pointer;
+        }
+         /* 鼠标放在按钮上面的时候有阴影 */
+        .toolbar button:hover {
+            box-shadow: 0 12px 16px 0 rgba(0,0,0,0.24),0 17px 50px 0 rgba(0,0,0,0.19);
+            
+        }
+        /* 按钮active的时候显示蓝色 */
+        .toolbar button.active {
+            background: #007bff;
+        }
+
+      /* 画布盒子 */
+        .grid-container {
+            width: 550px;
+            height: 550px;
+            border: 2px solid #b4afaf; 
+            background: white;
+            position: relative;
+            margin: 0 auto;
+        }
+        /* 画布格子 二维填充 50x50填充 */
+         .grid { 
+            display: grid;
+            grid-template-columns: repeat(50, 1fr);
+            grid-template-rows: repeat(50, 1fr);
+            width: 100%;
+            height: 100%;
+        }
+        /* 格子边框 */
+         .cell {
+            border: 0.5px solid #f0f0f0;
+           
+        } 
+        /* 颜色选择器 一行水平排列 居中对齐 */
+        .color-palette {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+           
+        }
+        /* 颜色选项正方形小块 圆角 鼠标在上边显示 */
+        .color-option {
+            width: 27px; 
+           
+            height: 27px;
+            cursor: pointer;
+          border-radius: 3px;
+        }
+        .color-option.selected {
+           width:30px;
+           height:30px;
+         box-shadow: 0 12px 16px 0 rgba(0, 0, 0, 0.319);
+         
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <br>
+
+    
+        <!-- v-bind控制点击事件 选中的变active 执行相应的工具函数-->
+        <div class="toolbar">
+            <button @click="tool = 'brush'" :class="{ active: tool === 'brush' }">🖌️</button>
+            <button @click="tool = 'eraser'" :class="{ active: tool === 'eraser' }">🧽</button>
+            <button @click="changeBackgroundColor" class="change-bg":class="{ active: isChangingBackground}">🪣</button>
+            <button @click="resetGrid">🔄</button>
+        </div>
+
+        <!-- v-for遍历颜色数组 v-bind修改盒子样式为color 设置条件（select=color)
+         v-on设置点击事件选中颜色 -->
+        <div class="color-palette">
+            <div v-for="color in colors" 
+                 :key="color"
+                 :style="{ backgroundColor: color }"
+                 class="color-option"
+                 :class="{ selected: selectedColor === color }"
+                 @click="selectedColor = color">
+            </div>
+     
+            </div>
+        <!-- 鼠标点击开始画画 鼠标移动画画 鼠标离开停止画画
+          遍历数组 让.row不参与渲染 内部的单元格参与渲染
+          内部单元格的背景用v-bind动态渲染-->
+        <div class="grid-container" 
+             @mousedown="startDrawing"
+             @mousemove="draw"
+             @mouseup="stopDrawing"
+             @mouseleave="stopDrawing">
+            <div class="grid">
+                <div v-for="(row, rowIndex) in grid" 
+                     :key="'row-' + rowIndex" 
+                     class="row" 
+                     style="display: contents;">
+                    <div v-for="(color, colIndex) in row" 
+                         :key="'cell-' + rowIndex + '-' + colIndex"
+                         class="cell"
+                         :style="{ backgroundColor: color }"
+                         @mousedown="setPixel(rowIndex, colIndex)">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+    </div>
+
+    <script>
+        new Vue({
+            el: '#app',
+            //初始化变量和数组 初始选项为画笔 黑色 不填充
+            data: {
+                gridSize: { rows: 50, cols: 50 },
+                grid: [],
+                colors: [
+                        '#000000','#FFFFFF','#FF0000','#00FF00','#0000FF','#FFFF00','#FF00FF','#00FFFF','#C0C0C0','#808080','#800000','#008000',
+                        '#000080','#808000','#800080','#008080','#FFA500','#FFC0CB','#A52A2A','#D2691E','#4B0082','#FFD700','#708090','#2F4F4F'
+                        
+                ],
+                selectedColor: '#000000',
+                tool: 'brush',
+                isDrawing: false,
+                isChangingBackground: false
+            },
+            // 创建阶段 发送初始化渲染请求
+            created() {
+                this.resetGrid();
+            },
+            //创建二维网格数组给grid
+            methods: {
+                resetGrid() {
+                    this.grid = Array.from({ length: this.gridSize.rows }, () => 
+                        Array(this.gridSize.cols).fill('#FFFFFF'),
+                        alert('确定要重置画板信息吗')
+                    );
+                    
+                },
+                //把toolname参数传给tool变量 初始不填充背景颜色
+                 setTool(toolName) {
+                    this.tool = toolName;
+                    this.isChangingBackground = false;
+                },
+                
+               
+                
+                // 改变背景色函数 
+                changeBackgroundColor() {
+                    this.isChangingBackground = true;
+                     this.tool = '';
+                    if (this.isChangingBackground) {
+                alert('🎨 请先选择颜色，然后点击画布应用背景色填充。');
+            }
+                },
+                
+
+                    handleCanvasClick(event) {
+                    if (this.isChangingBackground) {
+                        // 背景色模式：只改变背景色，不进行网格绘制
+                       
+                        return;
+                    }
+                    
+                    // 正常模式：进行网格绘制
+                    this.startDrawing(event);
+                },
+                // 修复：精确的坐标计算方法
+                getGridPosition(event) {
+                    const gridElement = event.currentTarget; // 使用currentTarget而不是target
+                    const rect = gridElement.getBoundingClientRect();
+                    
+                    // 考虑页面滚动和元素位置
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    
+                    // 确保坐标在网格范围内
+                    const boundedX = Math.max(0, Math.min(x, rect.width - 1));
+                    const boundedY = Math.max(0, Math.min(y, rect.height - 1));
+                    
+                    const cellWidth = rect.width / this.gridSize.cols;
+                    const cellHeight = rect.height / this.gridSize.rows;
+                    
+                    const col = Math.floor(boundedX / cellWidth);
+                    const row = Math.floor(boundedY / cellHeight);
+                    
+                    return { 
+                        row: Math.max(0, Math.min(row, this.gridSize.rows - 1)),
+                        col: Math.max(0, Math.min(col, this.gridSize.cols - 1))
+                    };
+                },
+                
+                setPixel(row, col) {
+                    if (row < 0 || row >= this.gridSize.rows || col < 0 || col >= this.gridSize.cols) {
+                        return;
+                    }
+                    if (this.isChangingBackground) {
+                // 填充整个画布为选中颜色
+                for (let i = 0; i < this.gridSize.rows; i++) {
+                    for (let j = 0; j < this.gridSize.cols; j++) {
+                        Vue.set(this.grid[i], j, this.selectedColor);
+                    }
+                }
+                this.isChangingBackground = false; // 填充完成后退出模式
+                return;
+            }
+                    if (this.tool === 'brush') {
+                        Vue.set(this.grid[row], col, this.selectedColor);
+                    } else if (this.tool === 'eraser') {
+                        Vue.set(this.grid[row], col, '#FFFFFF');
+                    }
+                },
+                
+                startDrawing(event) {
+                    this.isDrawing = true;
+                    const { row, col } = this.getGridPosition(event);
+                    this.setPixel(row, col);
+                },
+                
+                draw(event) {
+                    if (!this.isDrawing) return;
+                    const { row, col } = this.getGridPosition(event);
+                    this.setPixel(row, col);
+                },
+                
+                
+                stopDrawing() {
+                    this.isDrawing = false;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
